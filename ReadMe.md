@@ -46,7 +46,7 @@
 
 ### 算法核心代码
 1. 在楼层中按电梯时--算法
-(```)
+```
     def schedule_waiting_tasks(self):
         """
         this is a independent thread function
@@ -99,8 +99,8 @@
             task.task_type = task_run_from_elevator
             task.elevator_id = int(proper_elevator_thread.elevator.name[-1])-1
             self.add_task(task)
-(```)
-(```)
+```
+```
     def add_task(self, task):
         """
         add the task into the corresponding elevator thread
@@ -172,5 +172,5 @@
             pass
         else:
             self.execute_door_task(task)
-(```)
+```
 
