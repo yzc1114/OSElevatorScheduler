@@ -14,14 +14,15 @@ class ElevatorThread(QThread):
 
     def __init__(self, elevator_name, running_speed):
         super(ElevatorThread, self).__init__()
+        self.door_tasks = []
+        #self.lock = Lock()
+        self.lock = QMutex()
         self.elevator = Elevator(running_speed=running_speed,
                                  name=elevator_name,
                                  door_close_trigger=self.door_close_trigger,
                                  door_open_trigger=self.door_open_trigger,
-                                 current_level_trigger=self.current_level_trigger)
-        self.door_tasks = []
-        #self.lock = Lock()
-        self.lock = QMutex()
+                                 current_level_trigger=self.current_level_trigger,
+                                 mutex=self.lock)
 
     def run(self):
         """this method describe how every ElevatorThread is scheduled"""
@@ -34,7 +35,7 @@ class ElevatorThread(QThread):
                 # while door is opening
                 # since the door can only be opened or closed when the elevator is not running
                 self.execute_door_task()
-            if len(self.elevator.targets) != 0:
+            if len(self.elevator.targets) != 0 and self.elevator.is_door_opened is False:
                 # if we have buttons clicked in the elevator
                 # we goes to the next proper level
                 # find the proper level and go there
@@ -45,13 +46,21 @@ class ElevatorThread(QThread):
                 current_level = self.elevator.current_level
                 min_distance = 1000
                 proper_index = None
-                for index, target in enumerate(self.elevator.targets):
-                    if abs(target - current_level) < min_distance:
-                        min_distance = abs(target - current_level)
-                        proper_index = index
-                proper_level = self.elevator.targets[proper_index]
-                self.lock.lock()
-                self.elevator.targets.pop(proper_index)
+                if not self.lock.tryLock():
+                    continue
+                # the schedule work is done in big scheduler, so we only need to pop the first one
+
+
+                ## here we find the next most proper level to go
+                ## as time goes by, there maybe new targets being added,
+                ## so we need this lock,
+                ## rule: Never Change Direction, Always Choose The Closed One
+                #for index, target in enumerate(self.elevator.targets):
+                #    if abs(target - current_level) < min_distance:
+                #        min_distance = abs(target - current_level)
+                #        proper_index = index
+                #proper_level = self.elevator.targets[proper_index]
+                proper_level = self.elevator.targets.pop(0)
                 self.lock.unlock()
 
                 self.elevator.run_to_level(proper_level)

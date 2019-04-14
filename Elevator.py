@@ -21,7 +21,7 @@ class Elevator(object):
     door_close_trigger = None
     current_level_trigger = None
 
-    def __init__(self, running_speed, name, door_open_trigger, door_close_trigger, current_level_trigger):
+    def __init__(self, running_speed, name, door_open_trigger, door_close_trigger, current_level_trigger, mutex):
         super(Elevator, self).__init__()
         self.name = None
         self.current_level = 1
@@ -34,6 +34,7 @@ class Elevator(object):
         self.door_open_trigger = door_open_trigger
         self.door_close_trigger = door_close_trigger
         self.current_level_trigger = current_level_trigger
+        self.lock = mutex
         #self.door_close_timer = None
         #self.door_close_timer = QTimer()
         #self.door_close_timer.timeout.connect(self.close_door)
@@ -62,24 +63,28 @@ class Elevator(object):
         print(self.name + " start running to level " + str(level))
         self.current_target = level
         self.is_running = True
-        up = self.current_level < level
-        run_time = int(abs(level - self.current_level) / self.running_speed)
         # we use sleep to simulate running
-        for i in range(run_time):
-            sleep(self.running_speed)
+        while self.current_target != self.current_level:
+            # we use this lock to wait for the current level updating
+            up = self.current_level < level
             if up:
                 self.current_level += 1
+                sleep(self.running_speed)
             else:
                 self.current_level -= 1
+                sleep(self.running_speed)
             # check the alarm
             # if it is alarming, then shut down
             self.current_level_trigger.emit(self.name + " " + str(self.current_level))
             print(self.name + " is currently at " + str(self.current_level) + " level")
             if self.is_alarming:
                 return
+            # we use this lock to wait for the current level updating
+            self.lock.lock()
+            self.lock.unlock()
+
         # running is over
         self.is_running = False
-        self.current_level = level
         self.current_target = None
         self.open_door()
 

@@ -65,10 +65,49 @@ class ElevatorScheduler(QThread):
         elif task.task_type == task_run_from_elevator:
             # if the task type is a call from elevator
             # we simply add the new target into the elevator targets(array)
+            # but if the new task is in between the current_level and current_target,
+            # we have more options
             e_thread = self.elevator_threads[task.elevator_id]
             e_thread.lock.lock()
-            e_thread.elevator.targets.append(task.target_level)
-            e_thread.lock.unlock()
+            if e_thread.elevator.is_running:
+                # here we find the next most proper level to go
+                # as time goes by, there maybe new targets being added,
+                # so we need this lock,
+                # rule: Never Change Direction, Always Choose The Closed One
+                current_target = e_thread.elevator.current_target
+                current_level = e_thread.elevator.current_level
+                new_target_level = task.target_level
+                e_thread.elevator.targets.append(new_target_level)
+                e_thread.elevator.targets.append(current_target)
+                targets = e_thread.elevator.targets.copy()
+                is_up = current_target > current_level
+                if is_up:
+                    # we need the bigger slice to be executed first,
+                    # because we are uping
+                    smaller_slice = [x for x in targets if x < current_level]
+                    bigger_slice = [x for x in targets if x >= current_level]
+                    smaller_slice.sort()
+                    smaller_slice.reverse()
+                    bigger_slice.sort()
+                    new_targets = bigger_slice + smaller_slice
+                    e_thread.elevator.targets = new_targets
+                    e_thread.elevator.current_target = e_thread.elevator.targets.pop(0)
+                else:
+                    # we need the smaller slice to be executed first in this case
+                    smaller_slice = [x for x in targets if x < current_level]
+                    bigger_slice = [x for x in targets if x >= current_level]
+                    smaller_slice.sort()
+                    smaller_slice.reverse()
+                    bigger_slice.sort()
+                    new_targets = smaller_slice + bigger_slice
+                    e_thread.elevator.targets = new_targets
+                    e_thread.elevator.current_target = e_thread.elevator.targets.pop(0)
+                e_thread.lock.unlock()
+                return
+            else:
+                e_thread.elevator.targets.append(task.target_level)
+                e_thread.lock.unlock()
+                return
         elif task.task_type == task_alarm:
             # if alarm
             # we simply call the alarm function
@@ -149,20 +188,22 @@ class ElevatorScheduler(QThread):
                         proper_elevator_thread_index = i
             if proper_elevator_thread_index is None:
                 print("we have no elevator available anymore")
-                exit(-1)
+                continue
             proper_elevator_thread = self.elevator_threads[proper_elevator_thread_index]
             # we add the task.target_level into the targets array
             # so that, it is equal to we push a button in the elevator
             # this will simplify the schedule, hand over some tasks to
             # that elevator
-            proper_elevator_thread.lock.lock()
-            proper_elevator_thread.elevator.targets.append(task.target_level)
-            proper_elevator_thread.lock.unlock()
+            task.task_type = task_run_from_elevator
+            task.elevator_id = int(proper_elevator_thread.elevator.name[-1])-1
+            self.add_task(task)
 
     def print_status(self):
         for i in range(self.num_elevators):
             e_thread = self.elevator_threads[i]
             print(e_thread.elevator.name + " is currently at " + str(e_thread.elevator.current_level) + " level")
+
+
 
 
 
